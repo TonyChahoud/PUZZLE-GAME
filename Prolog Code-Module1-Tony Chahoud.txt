@@ -1,0 +1,229 @@
+                               % FIRSt ,let's implemedt Some useful BASIC/Fundemental funtion : %
+
+%%% BASIC FUNCTION N"1 %%%%
+  % decr and incr ,are useful for updating the coordinates during Explosion propagation :
+
+decr(X, X1):-         %In Prolog, it's generally a good to use separate variables for storing updated values 
+    X>1,              % only decrement R or C if they are greater than 1
+    X1 is X-1,!.      % CUT is a must here,to avid backtraking 
+decr(X, X1):-         % is like "else"in case the fisrt consition is not statisifed 
+    X1 is X.          % keep it the same
+
+  %%Assume that input grid shape:is 7x6 
+incrX(X, X1):-
+    X<7,	          % increment C if it is < total number of columns:7
+    X1 is X+1,!.
+incrX(X, X1):-        % is like "else"in case the fisrt consition is not statisifed 
+    X1 is X.
+incrY(Y, Y1):-
+    Y<6,              % only increment R if it is lower than the total number of rows:6
+    Y1 is Y+1,!.
+incrY(Y, Y1):-
+    Y1 is Y.
+
+%%% BASIC FUNCTION N"2 %%%%
+%indexer/3 predicate is used to retrieve the value at a specific position in a matrix or grid
+indexer([], _, []).         %if coordinates []--> values is also []
+indexer([R, C], M, V):-
+    %%nth1/3 is predifined predicate in prolog , ta access THE VALUE of an element in list, by its nth position
+    nth1(R, M, Row),        %this predictae to retrieve first the row at positin R from the grid. 
+    nth1(C, Row, V).        %then using the retrieved raw , it retreive the value V at psition c(column).
+
+%%% BASIC FUNCTION N"3 %%%%
+% it creates an updated list O by replacing element at position/inedx N wit new value "V"
+replace_nth(N,I,V,O):-
+    nth1(N,I,_,T),          %nth1/4predfined:acces element by its position & Store elements after it in [T]
+    nth1(N,O,V,T).
+     %%biref description : 1st predicate eliminates the element at position N in the input list I
+     %and replaces it with the new value V in the 2nd predicate. The remaining elements 
+     %of the input list I [T] and the new value V are combined to form the output list O. %
+
+
+
+
+
+                                    % lests start with the SUB_FUNCTIONS %
+
+%%% SUB-FUNCTION N"1 %%%%
+%%% Replacing a cell in the grid , with another value.
+
+replace_cell(M,RowPosition,ColPosition,Cell,N):-   % replaces matrix elements %used in propgation
+    nth1(RowPosition,M,Old),
+    replace_nth(ColPosition,Old,Cell,Neww), %update"old" row to"Neww" by replacing element at position Col with Cell
+    replace_nth(RowPosition,M,Neww,N).      %replaces this old row of matrix M with the updated row "Neww"-->N 
+
+%%%replacing a bomb under ceratins Conditional rule %%%used in solve fct
+replace_bombs(M,Row,Col,[3],N):- % replaces matrix elements under certain conditions
+    indexer([Row,Col],M,X),
+    X \= [_],                      % [_] used to represent the timer values for bombs;canbe [3]or[2]or[1]%%
+    X \= #,                        %passive node; that stop the explosion 
+    X \= @,                        % sureveillence node . that we have to remobe them by explosion 
+    X \= b,                        %burn or already explosed 
+    nth1(Row,M,Old),
+    replace_nth(Col,Old,[3],Upd),  %update"old" row to"Neww" by replacing element at position Col with [3]
+    replace_nth(Row,M,Upd,N).
+
+
+
+%%% SUB-FUNCTION N"2 %%%%
+%% checking if any @ remianed during solving ,after finisng the bombs & the turns .%used in solve fct  
+
+clean_row([]). 
+clean_row([H|T]):-                        %row is presented as a list where fist elemet is H and others are Tail . 
+    H \== @,
+    clean_row(T).
+clean_grid([]).
+clean_grid([H|T]):-                       % gird are represnted by rows , where H is the first one. 
+    clean_row(H),
+    clean_grid(T).                        %recurssive call for other rows .
+
+
+
+
+
+%%% SUB-FUNCTION N"3 %%%%
+%%% for Umpdating the Timer of the Bomob %%%used in slove fct 
+
+wait_row([],[]):-!.
+
+% updates the timers
+wait_row([X1|T1],[X2|T2]):-
+    X1 = [1],
+    X2 = fire,
+    wait_row(T1,T2),!.
+           %The cut ! was used to commit this solution and prevent backtracking to find any alternative solutions%%
+ 
+wait_row([X1|T1],[X2|T2]):-
+    X1 = [Timer],
+    New_Timer is Timer-1,
+    X2 = [New_Timer],
+    wait_row(T1,T2),!.
+
+wait_row([X1|T1],[X2|T2]):-
+   X1 = X2,
+   wait_row(T1,T2).
+wait_grid([],[]):-!.                  % gird are represnted by rows , where X1 is the first row
+wait_grid([X1|T1],[X2|T2]):-
+    wait_row(X1,X2),
+    wait_grid(T1,T2).
+
+%The code uses recursion to process each element of the input
+
+
+
+
+
+%%% SUB-FUNCTION N"4 %%%%
+%%% cheking the value of the updated coordinates during propgation, undergo under Certainn Rules %%% 
+
+
+break0(N1):-                           %N is the lenght of prpgation 
+   N1 is 1.                            % 1 then 0 by caling it in propagteX/Y %stop propgation 
+    
+
+check(_,Grid,R,C1,Grid1,N1):-
+    indexer([R,C1],Grid,#),
+    Grid1=Grid,                            % grid keept the same
+    break0(N1),!.                          % break after encountering a passive node
+%IMP%
+check(_,Grid,R,C1,Grid1,N1):-
+    indexer([R,C1],Grid,[_]),              %[_] is used to represent the timer values for bombs.
+    replace_cell(Grid,R,C1,fire,Grid1),    % replace bomb with fire, making a ready for propagation
+    break0(N1),!.                          % for optimization break after encountering bomb
+
+check(N,Grid,R,C1,Grid1,N1):-
+    indexer([R,C1],Grid,@), 
+    replace_cell(Grid,R,C1,.,Grid1),    %replace @ with o
+    N1 is N,!.
+
+check(N,Grid,R,C1,Grid1,N1):-
+    indexer([R,C1],Grid,.),
+    Grid1=Grid,
+     N1 is N,!.
+
+check(N,Grid,R,C1,Grid1,N1):-
+    indexer([R,C1],Grid,b),
+    Grid1=Grid,
+    N1 is N,!.
+
+check(N,Grid,R,C1,Grid1,N1):-
+      indexer([R,C1],Grid,fire),
+      Grid1=Grid,
+      N1 is N.
+
+
+
+%%% SUB-FUNCTION N"4 %%%%
+%%%  the 4-subfunstions of the propagation in each Direction %%%
+
+propagateXL(0,Grid1,_,_,UpdateGrid1):-
+    UpdateGrid1=Grid1,!.
+propagateXL(N,Grid,R,C,UpdateGrid1):-
+    decr(C, C1),
+    check(N,Grid,R,C1,Grid1,N1),       %call check funstion on corddinates C1,R
+    N2 is N1-1,
+    propagateXL(N2,Grid1,R,C1,UpdateGrid1). % recursively call propagate until it has looped 3 times
+
+propagateXR(0,Grid1,_,_,UpdateGrid1):-
+    UpdateGrid1=Grid1,!.
+propagateXR(N,Grid,R,C,UpdateGrid1):-
+    incrX(C, C1),		
+    check(N,Grid,R,C1,Grid1,N1),        %call check funstion on corddinates C1,R
+	N2 is N1-1,
+    propagateXR(N2,Grid1,R,C1,UpdateGrid1).  % recursively call propagate until it has looped 3 times 
+propagateYU(0,Grid1,_,_,UpdateGrid1):-
+    UpdateGrid1=Grid1,!.
+propagateYU(N,Grid,R,C,UpdateGrid1):-
+    decr(R, R1),
+    check(N,Grid,R1,C,Grid1,N1),        %call check funstion on corddinates R1,C
+    N2 is N1-1,
+    propagateYU(N2,Grid1,R1,C,UpdateGrid1).  % recursively call propagate until it has looped 3 times 
+
+
+propagateYD(0,Grid1,_,_,UpdateGrid1):-
+    UpdateGrid1=Grid1,!.
+propagateYD(N,Grid,R,C,UpdateGrid1):-
+    incrY(R, R1),                       %call check funstion on corddinates R1,C
+    check(N,Grid,R1,C,Grid1,N1),
+    N2 is N1-1,
+    propagateYD(N2,Grid1,R1,C,UpdateGrid1).
+
+
+
+%%% FUNCTION Propagate that call most of the subfuntion above%%%%
+
+propagate(Grid,Grid):-
+    not(indexer([_,_],Grid,fire)). % no more fire left
+propagate(Initial_grid,Final_grid):-
+    indexer([X,Y],Initial_grid,fire),      % retrieve coordinates where we have fire
+    propagateXR(3,Initial_grid,X,Y,Grid1), % propagate right
+    propagateXL(3,Grid1,X,Y,Grid2),        % propagate left
+    propagateYU(3,Grid2,X,Y,Grid3),        % propagate Up
+    propagateYD(3,Grid3,X,Y,Grid4),        % propagate down
+    replace_cell(Grid4,X,Y,b,Semi_grid),	% indiacte that a explosion already done on those coordinates
+    propagate(Semi_grid,Final_grid).  % recursively call propagate until there are no fires anymore
+
+
+ %%%%%%%% THE MAIN FUNCTION - THE bachbon Function %%%%%%%%%%%%
+
+solve(Grid,_,_,[]):-
+    clean_grid(Grid).
+solve(Grid,Bombs,Turns,[H|T]):-           % 3 main steps to follow 
+    H = wait,
+    Turns > 0,
+    wait_grid(Grid,Future_Grid),
+    New_Turns is Turns - 1,  
+    propagate(Future_Grid,Updated_Grid),
+    solve(Updated_Grid,Bombs,New_Turns,T).   % recursively call  until turn==0 
+
+solve(Grid,Bombs,Turns,[H|T]):-
+    H=[X,Y],
+    Bombs > 0,
+    Turns > 0,
+    replace_bombs(Grid,X,Y,[3],Temp_Grid),
+    wait_grid(Temp_Grid,Future_Grid),
+    New_Turns is Turns - 1,
+    New_Bombs is Bombs - 1,
+    propagate(Future_Grid,Updated_Grid),
+    solve(Updated_Grid,New_Bombs,New_Turns,T).% recursively call  until turn==0 
+
